@@ -1,0 +1,21 @@
+{
+  "name": "packsmart",
+  "version": "1.0.0",
+  "description": "PackSmart final project: outfit and packing planner for trips.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "full-stack",
+    "travel",
+    "outfits",
+    "wardrobe"
+  ],
+  "author": "CS198 Project Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
