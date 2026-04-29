@@ -1337,10 +1337,12 @@ async function updatePreview() {
   const previewImage = document.querySelector("#previewImage");
   if (previewImage) {
     if (data.city && data.country) {
-      previewImage.style.backgroundImage = `linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.08)), url("${destinationImageUrl(data.city, data.country)}")`;
-      previewImage.innerHTML = "";
+      previewImage.style.backgroundImage = "";
+      previewImage.innerHTML = `<img src="${attr(destinationImageUrl(data.city, data.country))}" alt="${attr(data.destination)}" onerror="this.remove(); this.parentElement.dataset.fallback='1'; this.parentElement.innerHTML='<span>${attr(data.city)}</span>';">`;
+      previewImage.dataset.fallback = "";
     } else {
       previewImage.style.backgroundImage = "";
+      previewImage.dataset.fallback = "1";
       previewImage.innerHTML = "<span>Select destination</span>";
     }
   }

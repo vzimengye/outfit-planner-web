@@ -849,6 +849,18 @@ textarea {
   overflow: hidden;
 }
 
+.trip-preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.trip-preview-image[data-fallback="1"] {
+  padding: 18px;
+  text-align: center;
+}
+
 .weather-hero {
   display: grid;
   grid-template-columns: auto 1fr auto;
