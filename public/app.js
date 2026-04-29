@@ -589,7 +589,7 @@ function renderAuth(mode) {
           <h1>${isSignup ? "Create your closet" : "Welcome back!"}</h1>
           <p class="muted">${isSignup ? "Start planning smarter outfits for your trips." : "Log in to continue your journey."}</p>
           <form class="form" id="authForm">
-            ${isSignup ? `<label>Name<input name="name" value="Ashley" required></label>` : ""}
+            ${isSignup ? `<label>Name<input name="name" placeholder="Your name" required></label>` : ""}
             <label>Email<input name="email" type="email" placeholder="you@example.com" required></label>
             <label>Password<input name="password" type="password" minlength="6" placeholder="At least 6 characters" required></label>
             ${!isSignup ? `<a class="forgot-link" href="#/login">Forgot password?</a>` : ""}
