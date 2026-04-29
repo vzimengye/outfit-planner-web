@@ -360,6 +360,40 @@ async function api(path, options = {}) {
   return data;
 }
 
+function localDataKey(name) {
+  return `packsmart_${state.user?.id || "guest"}_${name}`;
+}
+
+function loadLocalList(name) {
+  try {
+    return JSON.parse(localStorage.getItem(localDataKey(name)) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalList(name, items) {
+  try {
+    localStorage.setItem(localDataKey(name), JSON.stringify(items));
+  } catch {
+    // Local storage is a demo fallback; ignore quota/private-mode failures.
+  }
+}
+
+function mergeById(primary = [], fallback = []) {
+  const seen = new Set();
+  return [...primary, ...fallback].filter((item) => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function rememberLocalItem(name, item) {
+  if (!item?.id) return;
+  saveLocalList(name, mergeById([item], loadLocalList(name)));
+}
+
 async function loadSession() {
   const { user } = await api("/api/auth/me");
   state.user = user;
@@ -374,8 +408,8 @@ async function loadAppData() {
     api("/api/activity")
   ]);
   state.closet = closet.items || [];
-  state.trips = trips.trips || [];
-  state.recommendations = recommendations.recommendations || [];
+  state.trips = mergeById(trips.trips || [], loadLocalList("trips"));
+  state.recommendations = mergeById(recommendations.recommendations || [], loadLocalList("recommendations"));
   state.activities = activity.activities || [];
 }
 
@@ -1303,7 +1337,9 @@ function renderGenerate() {
       return;
     }
     const { trip } = await api("/api/trips", { method: "POST", body: form });
-    await generateForTrip(trip.id);
+    rememberLocalItem("trips", trip);
+    state.trips = mergeById([trip], state.trips);
+    await generateForTrip(trip.id, trip);
   });
   populateCities();
   syncEndDateMinimum();
@@ -1374,9 +1410,12 @@ async function updatePreview() {
   `).join("");
 }
 
-async function generateForTrip(tripId) {
-  const { recommendation } = await api("/api/recommendations", { method: "POST", body: { tripId } });
+async function generateForTrip(tripId, tripFallback = null) {
+  const trip = tripFallback || state.trips.find((candidate) => candidate.id === tripId);
+  const { recommendation } = await api("/api/recommendations", { method: "POST", body: { tripId, trip } });
+  rememberLocalItem("recommendations", recommendation);
   await loadAppData();
+  state.recommendations = mergeById([recommendation], state.recommendations);
   state.selectedDay = 0;
   navigate("/recommendations");
   toast(`Outfits ready for ${recommendation.destination}`);
