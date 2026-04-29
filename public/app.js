@@ -380,6 +380,22 @@ function saveLocalList(name, items) {
   }
 }
 
+function loadLocalObject(name) {
+  try {
+    return JSON.parse(localStorage.getItem(localDataKey(name)) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalObject(name, value) {
+  try {
+    localStorage.setItem(localDataKey(name), JSON.stringify(value));
+  } catch {
+    // Local storage is a demo fallback; ignore quota/private-mode failures.
+  }
+}
+
 function mergeById(primary = [], fallback = []) {
   const seen = new Set();
   return [...primary, ...fallback].filter((item) => {
@@ -412,7 +428,10 @@ function rememberActivity(text) {
 async function loadSession() {
   const { user } = await api("/api/auth/me");
   state.user = user;
-  if (user) await loadAppData();
+  if (user) {
+    state.user = { ...user, ...(loadLocalObject("profile") || {}) };
+    await loadAppData();
+  }
 }
 
 async function loadAppData() {
@@ -1202,7 +1221,15 @@ function renderTrips() {
     button.addEventListener("click", async () => {
       const trip = state.trips.find((candidate) => candidate.id === button.dataset.deleteTrip);
       if (!trip || !confirm(`Delete trip to ${trip.destination}?`)) return;
-      await api(`/api/trips/${trip.id}`, { method: "DELETE" });
+      try {
+        await api(`/api/trips/${trip.id}`, { method: "DELETE" });
+      } catch {
+        // Vercel may lose the temporary JSON record; still remove the local demo copy.
+      }
+      forgetLocalItem("trips", trip.id);
+      saveLocalList("recommendations", loadLocalList("recommendations").filter((rec) => rec.tripId !== trip.id));
+      state.trips = state.trips.filter((candidate) => candidate.id !== trip.id);
+      state.recommendations = state.recommendations.filter((rec) => rec.tripId !== trip.id);
       rememberActivity(`Deleted trip to ${trip.destination}`);
       await loadAppData();
       renderTrips();
@@ -1265,8 +1292,23 @@ function openTripModal(trip) {
     }
     form.activities = [...document.querySelectorAll("[data-trip-activity].selected")].map((node) => node.dataset.tripActivity);
     try {
-      await api(`/api/trips/${trip.id}`, { method: "PUT", body: form });
-      rememberActivity(`Updated trip to ${form.destination || trip.destination}`);
+      let updatedTrip = {
+        ...trip,
+        ...form,
+        activities: form.activities,
+        preferredColors: trip.preferredColors || [],
+        weather: trip.weather,
+        createdAt: trip.createdAt || new Date().toISOString()
+      };
+      try {
+        const result = await api(`/api/trips/${trip.id}`, { method: "PUT", body: form });
+        updatedTrip = result.trip || updatedTrip;
+      } catch {
+        // Vercel may lose the temporary JSON record; keep the local demo copy updated.
+      }
+      rememberLocalItem("trips", updatedTrip);
+      state.trips = newestFirst(mergeById([updatedTrip], state.trips.filter((candidate) => candidate.id !== updatedTrip.id)));
+      rememberActivity(`Updated trip to ${updatedTrip.destination || trip.destination}`);
       await loadAppData();
       modalRoot.innerHTML = "";
       if (route() === "/recommendations") {
@@ -1442,7 +1484,7 @@ async function updatePreview() {
 
 async function generateForTrip(tripId, tripFallback = null) {
   const trip = tripFallback || state.trips.find((candidate) => candidate.id === tripId);
-  const { recommendation } = await api("/api/recommendations", { method: "POST", body: { tripId, trip } });
+  const { recommendation } = await api("/api/recommendations", { method: "POST", body: { tripId, trip, closet: state.closet } });
   rememberLocalItem("recommendations", recommendation);
   rememberActivity(`Generated outfits for ${recommendation.destination}`);
   await loadAppData();
@@ -1569,8 +1611,16 @@ function renderProfile() {
     const payload = Object.fromEntries(new FormData(event.currentTarget));
     payload.avatar = selectedAvatar;
     try {
-      const { user } = await api("/api/profile", { method: "PUT", body: payload });
-      state.user = user;
+      let savedUser = { ...state.user, name: payload.name, avatar: payload.avatar };
+      try {
+        const result = await api("/api/profile", { method: "PUT", body: payload });
+        savedUser = { ...savedUser, ...(result.user || {}) };
+      } catch {
+        // Keep profile edits usable when Vercel has lost the temporary user row.
+      }
+      state.user = savedUser;
+      saveLocalObject("profile", { name: savedUser.name, avatar: savedUser.avatar });
+      rememberActivity("Updated profile");
       await loadAppData();
       toast("Profile saved");
       renderProfile();

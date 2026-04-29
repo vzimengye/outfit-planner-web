@@ -769,6 +769,16 @@ async function handleApi(req, res, url) {
       if (!trip && body.trip) trip = { ...body.trip, id: id("trip"), userId: user.id, weather: forecastFor(body.trip.destination, daysBetween(body.trip.startDate, body.trip.endDate), body.trip.startDate), createdAt: now() };
       if (!trip) return send(res, 404, { error: "Trip not found." });
       if (!db.trips.some((candidate) => candidate.id === trip.id)) db.trips.unshift(trip);
+      if (Array.isArray(body.closet)) {
+        const localItems = body.closet
+          .filter((item) => item && item.id && item.name)
+          .map((item) => ({ ...item, userId: user.id }));
+        const localIds = new Set(localItems.map((item) => item.id));
+        db.closetItems = [
+          ...localItems,
+          ...db.closetItems.filter((item) => item.userId !== user.id || !localIds.has(item.id))
+        ];
+      }
       const recommendation = await recommendOutfits(db, user, trip);
       writeDb(db);
       return send(res, 201, { recommendation });
