@@ -398,6 +398,11 @@ function rememberLocalItem(name, item) {
   saveLocalList(name, newestFirst(mergeById([item], loadLocalList(name))));
 }
 
+function forgetLocalItem(name, id) {
+  if (!id) return;
+  saveLocalList(name, loadLocalList(name).filter((item) => item.id !== id));
+}
+
 function rememberActivity(text) {
   const item = { id: `local_act_${Date.now()}_${Math.random().toString(16).slice(2)}`, text, createdAt: new Date().toISOString() };
   saveLocalList("activities", newestFirst(mergeById([item], loadLocalList("activities"))).slice(0, 20));
@@ -417,7 +422,7 @@ async function loadAppData() {
     api("/api/recommendations"),
     api("/api/activity")
   ]);
-  state.closet = closet.items || [];
+  state.closet = newestFirst(mergeById(loadLocalList("closet"), closet.items || []));
   state.trips = newestFirst(mergeById(loadLocalList("trips"), trips.trips || []));
   state.recommendations = newestFirst(mergeById(loadLocalList("recommendations"), recommendations.recommendations || []));
   state.activities = newestFirst(mergeById(loadLocalList("activities"), activity.activities || [])).slice(0, 20);
@@ -827,7 +832,13 @@ function drawItems() {
   });
   document.querySelectorAll("[data-delete]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await api(`/api/closet/${button.dataset.delete}`, { method: "DELETE" });
+      try {
+        await api(`/api/closet/${button.dataset.delete}`, { method: "DELETE" });
+      } catch {
+        // Vercel may lose the temporary JSON record; still remove the local demo copy.
+      }
+      forgetLocalItem("closet", button.dataset.delete);
+      state.closet = state.closet.filter((item) => item.id !== button.dataset.delete);
       rememberActivity("Removed an item from wardrobe");
       await loadAppData();
       drawItems();
@@ -947,7 +958,11 @@ function openItemModal(item = null) {
         }
         payload.image = await resizeClothingImage(file);
       }
-      await api(isEditing ? `/api/closet/${item.id}` : "/api/closet", { method: isEditing ? "PUT" : "POST", body: payload });
+      const result = await api(isEditing ? `/api/closet/${item.id}` : "/api/closet", { method: isEditing ? "PUT" : "POST", body: payload });
+      if (result.item) {
+        rememberLocalItem("closet", result.item);
+        state.closet = newestFirst(mergeById([result.item], state.closet));
+      }
       rememberActivity(isEditing ? `Updated ${payload.name || "an item"} in wardrobe` : `Added ${payload.name || "an item"} to wardrobe`);
       await loadAppData();
       modalRoot.innerHTML = "";
