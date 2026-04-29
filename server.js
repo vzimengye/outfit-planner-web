@@ -2,11 +2,12 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const os = require("os");
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
-const DATA_DIR = path.join(ROOT, "data");
+const DATA_DIR = process.env.VERCEL ? path.join(os.tmpdir(), "packsmart-data") : path.join(ROOT, "data");
 const DB_PATH = path.join(DATA_DIR, "packsmart-db.json");
 
 function loadEnvFile() {
@@ -757,13 +758,21 @@ function serveStatic(req, res, url) {
   fs.createReadStream(absolute).pipe(res);
 }
 
-const server = http.createServer((req, res) => {
+function requestHandler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.pathname.startsWith("/api/")) return handleApi(req, res, url);
   return serveStatic(req, res, url);
-});
+}
 
-server.listen(PORT, () => {
+const server = http.createServer(requestHandler);
+
+if (require.main === module) {
+  server.listen(PORT, () => {
+    ensureDb();
+    console.log(`PackSmart is running at http://localhost:${PORT}`);
+  });
+} else {
   ensureDb();
-  console.log(`PackSmart is running at http://localhost:${PORT}`);
-});
+}
+
+module.exports = requestHandler;

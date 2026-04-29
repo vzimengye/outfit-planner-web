@@ -327,12 +327,10 @@ button {
 }
 
 .auth-page {
-  height: 100vh;
-  min-height: 620px;
+  min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: #fff;
-  overflow: hidden;
 }
 
 .auth-art {
@@ -384,11 +382,11 @@ button {
 }
 
 .auth-panel {
-  height: 100vh;
-  min-height: 620px;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  overflow: auto;
   padding: 72px 86px 54px;
   position: relative;
 }
