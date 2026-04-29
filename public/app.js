@@ -775,6 +775,10 @@ function optionList(values, selectedValue = "") {
   return values.map((value) => `<option value="${attr(value)}" ${value === selectedValue ? "selected" : ""}>${value}</option>`).join("");
 }
 
+function placeholderOption(label) {
+  return `<option value="" disabled selected>${label}</option>`;
+}
+
 function openItemModal(item = null) {
   const isEditing = Boolean(item);
   const current = item || {};
@@ -1214,8 +1218,8 @@ function renderGenerate() {
         <h3>Trip Details</h3>
         <form class="form" id="tripForm">
           <div class="grid two">
-            <label>Country<input name="country" id="countrySelect" list="countryList" placeholder="Select or type the country" required><datalist id="countryList">${countryOptions.map((country) => `<option value="${attr(country)}"></option>`).join("")}</datalist></label>
-            <label>City<input name="city" id="citySelect" list="cityList" placeholder="Select or type the city" required><datalist id="cityList"></datalist></label>
+            <label>Country<select name="country" id="countrySelect" required>${placeholderOption("Select country")}${countryOptions.map((country) => `<option value="${attr(country)}">${country}</option>`).join("")}</select></label>
+            <label>City<select name="city" id="citySelect" required>${placeholderOption("Select city")}</select></label>
           </div>
           <input type="hidden" name="destination" id="destinationInput" value="">
           <div class="grid two">
@@ -1318,9 +1322,8 @@ function populateCities(resetCity = false) {
   const countryKey = countryOptions.find((country) => country.toLowerCase() === countrySelect.value.toLowerCase()) || countrySelect.value;
   const cities = sortedDestinationOptions[countryKey] || [];
   const previous = citySelect.value;
-  const cityList = document.querySelector("#cityList");
-  if (cityList) cityList.innerHTML = cities.map((city) => `<option value="${attr(city)}"></option>`).join("");
-  if (resetCity && cities.length && cities.includes(previous)) citySelect.value = "";
+  citySelect.innerHTML = `${placeholderOption(cities.length ? "Select city" : "Choose a listed country first")}${cities.map((city) => `<option value="${attr(city)}">${city}</option>`).join("")}`;
+  if (!resetCity && cities.includes(previous)) citySelect.value = previous;
   destinationInput.value = citySelect.value && countrySelect.value ? `${citySelect.value}, ${countrySelect.value}` : "";
 }
 
