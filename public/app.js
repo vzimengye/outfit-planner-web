@@ -398,6 +398,12 @@ function rememberLocalItem(name, item) {
   saveLocalList(name, newestFirst(mergeById([item], loadLocalList(name))));
 }
 
+function rememberActivity(text) {
+  const item = { id: `local_act_${Date.now()}_${Math.random().toString(16).slice(2)}`, text, createdAt: new Date().toISOString() };
+  saveLocalList("activities", newestFirst(mergeById([item], loadLocalList("activities"))).slice(0, 20));
+  state.activities = newestFirst(mergeById([item], state.activities || [])).slice(0, 20);
+}
+
 async function loadSession() {
   const { user } = await api("/api/auth/me");
   state.user = user;
@@ -414,7 +420,7 @@ async function loadAppData() {
   state.closet = closet.items || [];
   state.trips = newestFirst(mergeById(loadLocalList("trips"), trips.trips || []));
   state.recommendations = newestFirst(mergeById(loadLocalList("recommendations"), recommendations.recommendations || []));
-  state.activities = activity.activities || [];
+  state.activities = newestFirst(mergeById(loadLocalList("activities"), activity.activities || [])).slice(0, 20);
 }
 
 function navigate(path) {
@@ -748,7 +754,7 @@ function renderDashboard() {
       </section>
       <section class="card">
         <div class="card-head"><h3>Recent Activity</h3></div>
-        ${(state.activities || []).map((item) => `<div class="activity-row" style="grid-template-columns:44px 1fr"><span class="quick-icon">${item.text[0]}</span><p>${item.text}<br><span class="muted">${new Date(item.createdAt).toLocaleString()}</span></p></div>`).join("")}
+        ${(state.activities || []).map((item) => `<div class="activity-row" style="grid-template-columns:44px 1fr"><span class="quick-icon">${item.text[0]}</span><p>${item.text}<br><span class="muted">${new Date(item.createdAt).toLocaleString()}</span></p></div>`).join("") || `<p class="muted">No recent activity yet.</p>`}
       </section>
     </div>
     </div>
@@ -822,6 +828,7 @@ function drawItems() {
   document.querySelectorAll("[data-delete]").forEach((button) => {
     button.addEventListener("click", async () => {
       await api(`/api/closet/${button.dataset.delete}`, { method: "DELETE" });
+      rememberActivity("Removed an item from wardrobe");
       await loadAppData();
       drawItems();
       toast("Item removed");
@@ -941,6 +948,7 @@ function openItemModal(item = null) {
         payload.image = await resizeClothingImage(file);
       }
       await api(isEditing ? `/api/closet/${item.id}` : "/api/closet", { method: isEditing ? "PUT" : "POST", body: payload });
+      rememberActivity(isEditing ? `Updated ${payload.name || "an item"} in wardrobe` : `Added ${payload.name || "an item"} to wardrobe`);
       await loadAppData();
       modalRoot.innerHTML = "";
       renderWardrobe();
@@ -1180,6 +1188,7 @@ function renderTrips() {
       const trip = state.trips.find((candidate) => candidate.id === button.dataset.deleteTrip);
       if (!trip || !confirm(`Delete trip to ${trip.destination}?`)) return;
       await api(`/api/trips/${trip.id}`, { method: "DELETE" });
+      rememberActivity(`Deleted trip to ${trip.destination}`);
       await loadAppData();
       renderTrips();
       toast("Trip deleted");
@@ -1242,6 +1251,7 @@ function openTripModal(trip) {
     form.activities = [...document.querySelectorAll("[data-trip-activity].selected")].map((node) => node.dataset.tripActivity);
     try {
       await api(`/api/trips/${trip.id}`, { method: "PUT", body: form });
+      rememberActivity(`Updated trip to ${form.destination || trip.destination}`);
       await loadAppData();
       modalRoot.innerHTML = "";
       if (route() === "/recommendations") {
@@ -1342,6 +1352,7 @@ function renderGenerate() {
     }
     const { trip } = await api("/api/trips", { method: "POST", body: form });
     rememberLocalItem("trips", trip);
+    rememberActivity(`Planned trip to ${trip.destination}`);
     state.trips = mergeById([trip], state.trips);
     await generateForTrip(trip.id, trip);
   });
@@ -1418,6 +1429,7 @@ async function generateForTrip(tripId, tripFallback = null) {
   const trip = tripFallback || state.trips.find((candidate) => candidate.id === tripId);
   const { recommendation } = await api("/api/recommendations", { method: "POST", body: { tripId, trip } });
   rememberLocalItem("recommendations", recommendation);
+  rememberActivity(`Generated outfits for ${recommendation.destination}`);
   await loadAppData();
   state.recommendations = mergeById([recommendation], state.recommendations);
   state.selectedDay = 0;
