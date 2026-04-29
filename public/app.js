@@ -389,9 +389,13 @@ function mergeById(primary = [], fallback = []) {
   });
 }
 
+function newestFirst(items = []) {
+  return [...items].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
 function rememberLocalItem(name, item) {
   if (!item?.id) return;
-  saveLocalList(name, mergeById([item], loadLocalList(name)));
+  saveLocalList(name, newestFirst(mergeById([item], loadLocalList(name))));
 }
 
 async function loadSession() {
@@ -408,8 +412,8 @@ async function loadAppData() {
     api("/api/activity")
   ]);
   state.closet = closet.items || [];
-  state.trips = mergeById(trips.trips || [], loadLocalList("trips"));
-  state.recommendations = mergeById(recommendations.recommendations || [], loadLocalList("recommendations"));
+  state.trips = newestFirst(mergeById(loadLocalList("trips"), trips.trips || []));
+  state.recommendations = newestFirst(mergeById(loadLocalList("recommendations"), recommendations.recommendations || []));
   state.activities = activity.activities || [];
 }
 
