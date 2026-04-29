@@ -192,6 +192,24 @@ function activity(db, userId, text) {
   db.activities = db.activities.slice(0, 80);
 }
 
+function findOrCreateOAuthUser(db, profile, provider) {
+  let user = db.users.find((candidate) => candidate.email === profile.email);
+  if (!user) {
+    user = {
+      id: id("user"),
+      name: profile.name,
+      email: profile.email,
+      passwordHash: hashPassword(id("oauth")),
+      provider,
+      avatar: profile.avatar || "",
+      createdAt: now()
+    };
+    db.users.push(user);
+    seedUser(db, user);
+  }
+  return user;
+}
+
 function seedUser(db, user) {
   const samples = clothingSamples();
   samples.forEach(([name, category, type, color, season, warmth, formality, swatch, image]) => {
@@ -549,7 +567,7 @@ async function handleApi(req, res, url) {
     }
 
     if (method === "GET" && url.pathname === "/api/auth/google/callback") {
-      let profile = { email: "google.demo@packsmart.local", name: "Ashley", avatar: "" };
+      let profile = { email: "google.demo@packsmart.local", name: "Google Demo", avatar: "" };
       if (!url.searchParams.get("demo") && process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         const redirectUri = process.env.GOOGLE_REDIRECT_URI || `http://localhost:${PORT}/api/auth/google/callback`;
         const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -564,20 +582,25 @@ async function handleApi(req, res, url) {
           })
         });
         const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || !tokenData.access_token) return redirect(res, "/#/login");
         const userInfo = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
           headers: { Authorization: `Bearer ${tokenData.access_token}` }
         });
         const googleUser = await userInfo.json();
+        if (!userInfo.ok || !googleUser.email) return redirect(res, "/#/login");
         profile = { email: googleUser.email, name: googleUser.name, avatar: "" };
       }
-      let user = db.users.find((candidate) => candidate.email === profile.email);
-      if (!user) {
-        user = { id: id("user"), name: profile.name, email: profile.email, passwordHash: hashPassword(id("oauth")), provider: "google", avatar: profile.avatar, createdAt: now() };
-        db.users.push(user);
-        seedUser(db, user);
-      }
+      const user = findOrCreateOAuthUser(db, profile, "google");
       const token = makeSession(db, user);
       activity(db, user.id, "Signed in with Google");
+      writeDb(db);
+      return redirect(res, "/#/dashboard", { "Set-Cookie": `packsmart_session=${token}; HttpOnly; Path=/; SameSite=Lax` });
+    }
+
+    if (method === "GET" && url.pathname === "/api/auth/apple") {
+      const user = findOrCreateOAuthUser(db, { email: "apple.demo@packsmart.local", name: "Apple Demo", avatar: "" }, "apple");
+      const token = makeSession(db, user);
+      activity(db, user.id, "Signed in with Apple");
       writeDb(db);
       return redirect(res, "/#/dashboard", { "Set-Cookie": `packsmart_session=${token}; HttpOnly; Path=/; SameSite=Lax` });
     }

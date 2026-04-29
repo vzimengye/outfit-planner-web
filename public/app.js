@@ -598,7 +598,7 @@ function renderAuth(mode) {
           </form>
           <div class="divider">or</div>
           <a class="btn oauth-btn" href="/api/auth/google"><span class="google-mark">G</span>Continue with Google</a>
-          <button class="btn oauth-btn" type="button" id="appleDemo"><span class="apple-mark">●</span>Continue with Apple</button>
+          <a class="btn oauth-btn" href="/api/auth/apple"><span class="apple-mark">A</span>Continue with Apple</a>
           <div class="secure-note">
             <span class="shield">✓</span>
             <div>
@@ -622,7 +622,6 @@ function renderAuth(mode) {
       document.querySelector("#authError").textContent = error.message;
     }
   });
-  document.querySelector("#appleDemo").addEventListener("click", () => toast("Apple sign in is only shown for the mockup."));
 }
 
 function renderDashboard() {
