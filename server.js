@@ -9,6 +9,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = process.env.VERCEL ? path.join(os.tmpdir(), "packsmart-data") : path.join(ROOT, "data");
 const DB_PATH = path.join(DATA_DIR, "packsmart-db.json");
+const SESSION_SECRET = process.env.SESSION_SECRET || "packsmart-demo-session-secret";
 
 function loadEnvFile() {
   const envPath = path.join(ROOT, ".env");
@@ -146,8 +147,10 @@ function publicUser(user) {
 function currentUser(req, db) {
   const token = cookieValue(req, "packsmart_session");
   const session = db.sessions.find((item) => item.token === token);
-  if (!session) return null;
-  return db.users.find((user) => user.id === session.userId) || null;
+  if (session) return db.users.find((user) => user.id === session.userId) || null;
+  const signedUser = verifySessionToken(token);
+  if (!signedUser) return null;
+  return db.users.find((user) => user.id === signedUser.id) || signedUser;
 }
 
 function requireUser(req, res, db) {
@@ -159,10 +162,29 @@ function requireUser(req, res, db) {
   return user;
 }
 
-function makeSession(db, userId) {
+function signSessionUser(user) {
+  const payload = Buffer.from(JSON.stringify(publicUser(user))).toString("base64url");
+  const signature = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  return `auth_${payload}.${signature}`;
+}
+
+function verifySessionToken(token) {
+  if (!token || !token.startsWith("auth_")) return null;
+  const [payload, signature] = token.slice(5).split(".");
+  if (!payload || !signature) return null;
+  const expected = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function makeSession(db, user) {
   const token = id("sess");
-  db.sessions.push({ token, userId, createdAt: now() });
-  return token;
+  db.sessions.push({ token, userId: user.id, createdAt: now() });
+  return signSessionUser(user);
 }
 
 function activity(db, userId, text) {
@@ -492,7 +514,7 @@ async function handleApi(req, res, url) {
       const user = { id: id("user"), name, email, passwordHash: hashPassword(password), provider: "password", avatar: "", createdAt: now() };
       db.users.push(user);
       seedUser(db, user);
-      const token = makeSession(db, user.id);
+      const token = makeSession(db, user);
       writeDb(db);
       return send(res, 201, { user: publicUser(user) }, { "Set-Cookie": `packsmart_session=${token}; HttpOnly; Path=/; SameSite=Lax` });
     }
@@ -504,7 +526,7 @@ async function handleApi(req, res, url) {
       if (!user || !verifyPassword(String(body.password || ""), user.passwordHash)) {
         return send(res, 401, { error: "Invalid email or password." });
       }
-      const token = makeSession(db, user.id);
+      const token = makeSession(db, user);
       activity(db, user.id, "Logged in");
       writeDb(db);
       return send(res, 200, { user: publicUser(user) }, { "Set-Cookie": `packsmart_session=${token}; HttpOnly; Path=/; SameSite=Lax` });
@@ -554,7 +576,7 @@ async function handleApi(req, res, url) {
         db.users.push(user);
         seedUser(db, user);
       }
-      const token = makeSession(db, user.id);
+      const token = makeSession(db, user);
       activity(db, user.id, "Signed in with Google");
       writeDb(db);
       return redirect(res, "/#/dashboard", { "Set-Cookie": `packsmart_session=${token}; HttpOnly; Path=/; SameSite=Lax` });
